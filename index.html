@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balloon Letters</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #e8e4e0;
+    font-family: 'DM Sans', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #canvas-container { flex: 1; position: relative; cursor: grab; }
+  #canvas-container:active { cursor: grabbing; }
+  canvas { display: block; }
+  .hint {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: #999; letter-spacing: 0.5px;
+    pointer-events: none; user-select: none;
+  }
+  .hint-left  { left: 24px; transform: none; }
+  .hint-right { left: auto; right: 24px; transform: none; pointer-events: auto; }
+  .hint-right a { color: inherit; text-decoration: none; }
+  .hint-right a:hover { text-decoration: underline; }
+  @media (max-width: 640px) {
+    .hint:not(.hint-left):not(.hint-right) { display: none; }
+  }
+  @media (max-width: 420px) {
+    .hint-right { display: none; }
+  }
+  .bottom-bar {
+    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 32px 0 48px;
+    width: min(520px, calc(100vw - 48px));
+  }
+  .input-bar {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.30);
+    border-radius: 48px; padding: 12px 24px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.4);
+    width: 220px; margin: 0 auto; z-index: 10;
+    transition: width 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .input-bar:focus-within {
+    width: 100%;
+  }
+  .input-row {
+    position: relative; width: 100%;
+  }
+  .webcam-toast {
+    position: fixed; top: 58px; right: 24px;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(180,180,180,0.75);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.20);
+    border-radius: 12px; padding: 4px 4px 4px 8px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.2);
+    font-size: 11px; color: #ffffff; white-space: nowrap;
+    opacity: 1; transition: opacity 400ms ease, transform 400ms ease;
+    z-index: 20;
+  }
+  .webcam-toast.hidden {
+    opacity: 0; transform: translateY(-8px); pointer-events: none;
+  }
+  .webcam-toast-dismiss {
+    border: none; background: transparent; cursor: pointer;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.70); font-size: 14px; line-height: 1;
+    flex-shrink: 0;
+    font-family: 'DM Sans', sans-serif; padding: 0;
+  }
+  .webcam-toast-dismiss:hover { color: rgba(255,255,255,1); }
+  .input-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: rgba(40,40,40,0.50); font-weight: 500; flex-shrink: 0;
+  }
+  .input-bar textarea {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500;
+    color: rgba(40,40,40,0.90); min-width: 0;
+    resize: none; overflow: hidden; line-height: 1.6;
+    min-height: 26px; padding: 0; text-align: center;
+  }
+  .input-bar textarea::placeholder { color: rgba(40,40,40,0.35); }
+  #btn-webcam {
+    flex-shrink: 0; border: none; background: transparent; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 1.2px;
+    color: rgba(40,40,40,0.40); padding: 0;
+    position: relative;
+    transition: color 0.5s, background-color 0.9s ease, border-radius 0.9s ease;
+  }
+  #btn-webcam:hover { color: rgba(40,40,40,0.70); }
+  #btn-webcam .wc-c {
+    display: inline-block;
+  }
+  #btn-webcam .wc-ball {
+    position: absolute; left: 0; top: 50%;
+    width: 14px; height: 14px;
+    background: #ff3b30; border-radius: 50%;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  #btn-webcam .wc-ball::before,
+  #btn-webcam .wc-ball::after { transition: opacity 400ms ease; }
+  #btn-webcam .wc-ball.arrived::before,
+  #btn-webcam .wc-ball.arrived::after { opacity: 0; }
+  #btn-webcam .wc-ball::before {
+    content: '';
+    position: absolute;
+    width: 2px; height: 2px;
+    background: white;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    box-shadow: 6px 0 0 white;
+  }
+  #btn-webcam .wc-ball::after {
+    content: '';
+    position: absolute;
+    width: 7px; height: 3.5px;
+    border: 1.5px solid white;
+    border-top: none;
+    border-radius: 0 0 7px 7px;
+    bottom: 2px; left: 50%; transform: translateX(-50%);
+  }
+  #btn-webcam.cam-on {
+    background-color: #ff3b30 !important;
+    border-radius: 50% !important;
+    width: 10px !important; height: 10px !important;
+    animation: recPulse 1.6s ease-out infinite;
+  }
+  @keyframes recPulse {
+    0%   { box-shadow: 0 0 0 0   rgba(255,59,48,0.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(255,59,48,0);    }
+    100% { box-shadow: 0 0 0 0   rgba(255,59,48,0);    }
+  }
+  #webcam-preview {
+    position: absolute; bottom: 84px; right: 16px;
+    width: 148px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 1000ms ease;
+  }
+  #webcam-preview.visible {
+    opacity: 1; pointer-events: auto;
+  }
+  #webcam-preview .cam-frame {
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+    border: 1px solid rgba(255,255,255,0.35);
+  }
+  #webcam-preview video {
+    width: 100%; display: block; transform: scaleX(-1);
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <div class="hint hint-left">SQUISHY LETTERS</div>
+  <div class="hint">Drag to orbit · Scroll to zoom</div>
+  <div class="hint hint-right">by <a href="https://askformailinh.com" target="_blank" rel="noopener">Mai-Linh Barry</a> using Claude Code</div>
+  <div id="webcam-preview">
+    <div class="cam-frame">
+      <video id="webcam-video" autoplay muted playsinline></video>
+    </div>
+  </div>
+</div>
+
+<div class="webcam-toast hidden" id="hands-toast">
+  Use your 🤲 to interact with the letters
+  <button class="webcam-toast-dismiss" id="hands-toast-dismiss" aria-label="Dismiss">×</button>
+</div>
+
+<div class="webcam-toast hidden" id="webcam-toast">
+  Turn on the 📷 for more fun!
+  <button class="webcam-toast-dismiss" id="webcam-toast-dismiss" aria-label="Dismiss">×</button>
+</div>
+
+<div class="bottom-bar">
+  <div class="input-row">
+    <div class="input-bar">
+      <span class="input-label">Text</span>
+      <textarea id="text-input" placeholder="Type something..." rows="1"></textarea>
+      <button id="btn-webcam">Webcam</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ── Orbit controls ───────────────────────────────────────────────────────────
+class Orbit {
+  constructor(cam, el) {
+    this.cam = cam; this.el = el;
+    this.target = new THREE.Vector3();
+    this.sph = new THREE.Spherical();
+    this.sphD = new THREE.Spherical();
+    this.sc = 1; this.st = new THREE.Vector2(); this.dn = false;
+    this.df = 0.08;
+    this.sph.setFromVector3(new THREE.Vector3().copy(cam.position).sub(this.target));
+    el.addEventListener('pointerdown', e => { this.dn = true; this.st.set(e.clientX, e.clientY); });
+    el.addEventListener('pointermove', e => {
+      if (!this.dn) return;
+      this.sphD.theta -= 2*Math.PI*(e.clientX-this.st.x)/el.clientWidth*0.5;
+      this.sphD.phi   -= 2*Math.PI*(e.clientY-this.st.y)/el.clientHeight*0.5;
+      this.st.set(e.clientX, e.clientY);
+    });
+    el.addEventListener('pointerup',    () => this.dn = false);
+    el.addEventListener('pointerleave', () => this.dn = false);
+    el.addEventListener('wheel', e => { e.preventDefault(); this.sc *= e.deltaY > 0 ? 1.06 : 0.94; }, { passive: false });
+  }
+  update() {
+    const o = new THREE.Vector3().copy(this.cam.position).sub(this.target);
+    this.sph.setFromVector3(o);
+    this.sph.theta += this.sphD.theta * this.df;
+    this.sph.phi   += this.sphD.phi   * this.df;
+    this.sph.phi    = Math.max(0.15, Math.min(Math.PI - 0.15, this.sph.phi));
+    this.sph.radius = Math.max(4, Math.min(40, this.sph.radius * this.sc));
+    this.sc = 1;
+    o.setFromSpherical(this.sph);
+    this.cam.position.copy(this.target).add(o);
+    this.cam.lookAt(this.target);
+    this.sphD.theta *= (1 - this.df);
+    this.sphD.phi   *= (1 - this.df);
+  }
+  reset() { this.sph.set(18, Math.PI / 2.2, 0.3); this.sphD.set(0, 0, 0); this.sc = 1; }
+}
+
+// ── Chrome matcap ─────────────────────────────────────────────────────────────
+function generateMatcapTexture(size) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const d = img.data;
+  const h = size / 2;
+
+  for (let yi = 0; yi < size; yi++) {
+    for (let xi = 0; xi < size; xi++) {
+      const nx = (xi - h) / h, ny = (h - yi) / h;
+      const r2 = nx * nx + ny * ny;
+      const i  = (yi * size + xi) * 4;
+      if (r2 >= 1) { d[i]=d[i+1]=d[i+2]=12; d[i+3]=255; continue; }
+      const nz = Math.sqrt(1 - r2);
+
+      // ── Chrome mirror ─────────────────────────────────────────────────
+      // Sharp sky/ground split — mirrors show high contrast, not gradients
+      const sky    = Math.pow(Math.max(0,  ny), 0.08) * 0.92;  // nearly flat bright sky
+      const ground = Math.pow(Math.max(0, -ny), 0.40) * 0.06;  // near-black ground
+      const horiz  = Math.exp(-ny * ny * 220) * 0.18;          // razor-thin horizon glow
+      const env    = sky + ground + horiz;
+
+      // Fresnel: edges pick up more sky (chrome brightens at grazing angles)
+      const fr   = Math.pow(1 - nz, 2.2) * 0.50;
+      const envF = env * (1 - fr * 0.4);
+
+      // Primary specular — tight sun-like hotspot
+      const s1x = nx - 0.14, s1y = ny - 0.54;
+      const spec1 = Math.exp(-(s1x*s1x * 90 + s1y*s1y * 80)) * 6.0;
+
+      // Secondary fill highlight
+      const s2x = nx + 0.30, s2y = ny + 0.22;
+      const spec2 = Math.exp(-(s2x*s2x + s2y*s2y) * 55) * 0.70;
+
+      const lum = envF + spec1 + spec2;
+
+      // Chrome tint — cool blue-white
+      d[i]   = Math.round(Math.max(0, Math.min(255, lum * 230)));
+      d[i+1] = Math.round(Math.max(0, Math.min(255, lum * 242)));
+      d[i+2] = Math.round(Math.max(0, Math.min(255, lum * 255)));
+      d[i+3] = 255;
+    }
+  }
+
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  return tex;
+}
+
+const matcapTex = generateMatcapTexture(512);
+
+function createBalloonMaterial() {
+  return new THREE.MeshMatcapMaterial({ matcap: matcapTex });
+}
+
+function createSeamMaterial() {
+  return new THREE.MeshMatcapMaterial({ matcap: matcapTex, color: 0x666666 });
+}
+
+// ── Tube letter system ───────────────────────────────────────────────────────
+const TUBE_R = 0.24;
+const LH     = 1.40;
+
+// Each entry: array of stroke defs.
+//   { pts: [[x,y], ...], closed?: true }  → TubeGeometry
+//   { dot: [x, y] }                       → SphereGeometry
+const STROKES = {
+  'A': [
+    { pts: [[0.04,0],[0.17,LH*0.46],[0.44,LH*0.97]] },
+    { pts: [[0.44,LH*0.97],[0.71,LH*0.46],[0.84,0]] },
+    { pts: [[0.15,LH*0.34],[0.73,LH*0.34]] }
+  ],
+  'B': [
+    { pts: [[0.18,0],[0.18,LH]] },
+    { pts: [[0.18,LH],[0.54,LH*0.98],[0.74,LH*0.83],[0.74,LH*0.62],[0.52,LH*0.50],[0.18,LH*0.50]] },
+    { pts: [[0.18,LH*0.50],[0.58,LH*0.48],[0.80,LH*0.34],[0.80,LH*0.16],[0.56,LH*0.02],[0.18,0]] }
+  ],
+  'C': [
+    { pts: [[0.80,LH*0.80],[0.58,LH*0.97],[0.24,LH*0.92],[0.08,LH*0.70],[0.08,LH*0.50],[0.08,LH*0.30],[0.24,LH*0.08],[0.58,LH*0.03],[0.80,LH*0.20]] }
+  ],
+  'D': [
+    { pts: [[0.18,0],[0.18,LH]] },
+    { pts: [[0.18,LH],[0.54,LH*0.98],[0.82,LH*0.78],[0.86,LH*0.50],[0.82,LH*0.22],[0.54,LH*0.02],[0.18,0]] }
+  ],
+  'E': [
+    { pts: [[0.18,0],[0.18,LH]] },
+    { pts: [[0.18,LH],[0.74,LH]] },
+    { pts: [[0.18,LH*0.50],[0.62,LH*0.50]] },
+    { pts: [[0.18,0],[0.74,0]] }
+  ],
+  'F': [
+    { pts: [[0.18,0],[0.18,LH]] },
+    { pts: [[0.18,LH],[0.74,LH]] },
+    { pts: [[0.18,LH*0.52],[0.62,LH*0.52]] }
+  ],
+  'G': [
+    { pts: [[0.80,LH*0.80],[0.56,LH*0.97],[0.22,LH*0.90],[0.08,LH*0.68],[0.08,LH*0.50],[0.08,LH*0.32],[0.22,LH*0.10],[0.56,LH*0.03],[0.80,LH*0.18],[0.86,LH*0.38],[0.86,LH*0.52]] },
+    { pts: [[0.86,LH*0.52],[0.48,LH*0.52]] }
+  ],
+  'H': [
+    { pts: [[0.09,0],[0.09,LH]] },
+    { pts: [[0.85,0],[0.85,LH]] },
+    { pts: [[0.09,LH*0.50],[0.85,LH*0.50]] }
+  ],
+  'I': [ { pts: [[0.20,0],[0.20,LH]] } ],
+  'J': [
+    { pts: [[0.60,LH],[0.60,LH*0.24],[0.48,LH*0.05],[0.26,LH*0.04],[0.12,LH*0.20],[0.10,LH*0.40]] }
+  ],
+  'K': [
+    { pts: [[0.15,0],[0.15,LH]] },
+    { pts: [[0.15,LH*0.52],[0.40,LH*0.52],[0.78,LH]] },
+    { pts: [[0.40,LH*0.52],[0.78,0]] }
+  ],
+  'L': [ { pts: [[0.15,LH],[0.15,0],[0.72,0]] } ],
+  'M': [ { pts: [[0.08,0],[0.08,LH],[0.50,LH*0.36],[0.92,LH],[0.92,0]] } ],
+  'N': [ { pts: [[0.09,0],[0.09,LH],[0.85,0],[0.85,LH]] } ],
+  'O': [
+    { pts: [[0.88,LH*0.50],[0.75,LH*0.87],[0.44,LH*0.99],[0.09,LH*0.87],
+            [0.00,LH*0.50],[0.09,LH*0.13],[0.44,LH*0.01],[0.75,LH*0.13]], closed: true }
+  ],
+  'P': [
+    { pts: [[0.12,0],[0.12,LH]] },
+    { pts: [[0.12,LH],[0.52,LH*0.98],[0.84,LH*0.82],[0.84,LH*0.58],[0.52,LH*0.44],[0.12,LH*0.44]] }
+  ],
+  'Q': [
+    { pts: [
+      [0.94,LH*0.00],
+      [0.80,LH*0.06],
+      [0.68,LH*0.14],
+      [0.82,LH*0.36],
+      [0.82,LH*0.64],
+      [0.70,LH*0.88],
+      [0.44,LH*0.98],
+      [0.18,LH*0.88],
+      [0.06,LH*0.64],
+      [0.06,LH*0.36],
+      [0.18,LH*0.12],
+      [0.44,LH*0.02],
+      [0.62,LH*0.08],
+    ]}
+  ],
+  'R': [
+    { pts: [[0.12,0],[0.12,LH]] },
+    { pts: [[0.12,LH],[0.52,LH*0.98],[0.84,LH*0.82],[0.84,LH*0.58],[0.52,LH*0.44],[0.12,LH*0.44]] },
+    { pts: [[0.46,LH*0.44],[0.84,0]] }
+  ],
+  'S': [
+    { pts: [[0.76,LH*0.80],[0.52,LH*0.97],[0.20,LH*0.88],[0.10,LH*0.72],[0.14,LH*0.57],[0.38,LH*0.50],[0.62,LH*0.43],[0.80,LH*0.30],[0.78,LH*0.14],[0.56,LH*0.03],[0.26,LH*0.02],[0.10,LH*0.14]] }
+  ],
+  'T': [
+    { pts: [[0.06,LH],[0.78,LH]] },
+    { pts: [[0.42,LH],[0.42,0]] }
+  ],
+  'U': [
+    { pts: [[0.09,LH],[0.09,LH*0.28],[0.14,LH*0.08],[0.44,LH*0.01],[0.74,LH*0.08],[0.79,LH*0.28],[0.79,LH]] }
+  ],
+  'V': [ { pts: [[0.04,LH],[0.42,0],[0.80,LH]] } ],
+  'W': [ { pts: [[0.06,LH],[0.26,0],[0.52,LH*0.48],[0.78,0],[0.98,LH]] } ],
+  'X': [
+    { pts: [[0.05,LH],[0.80,0]] },
+    { pts: [[0.80,LH],[0.05,0]] }
+  ],
+  'Y': [
+    { pts: [[0.05,LH],[0.42,LH*0.50]] },
+    { pts: [[0.80,LH],[0.42,LH*0.50]] },
+    { pts: [[0.42,LH*0.50],[0.42,0]] }
+  ],
+  'Z': [
+    { pts: [[0.06,LH],[0.78,LH]] },
+    { pts: [[0.78,LH],[0.06,0]] },
+    { pts: [[0.06,0],[0.78,0]] }
+  ],
+  '0': [
+    { pts: [[0.42,0],[0.14,LH*0.17],[0.06,LH*0.42],[0.06,LH*0.58],[0.14,LH*0.83],[0.42,LH*0.98],[0.70,LH*0.83],[0.78,LH*0.58],[0.78,LH*0.42],[0.70,LH*0.17],[0.42,0]], closed: true }
+  ],
+  '1': [ { pts: [[0.20,LH*0.86],[0.38,LH*0.98],[0.38,0]] } ],
+  '2': [
+    { pts: [[0.10,LH*0.78],[0.18,LH*0.98],[0.48,LH*0.98],[0.76,LH*0.80],[0.76,LH*0.62],[0.10,LH*0.06],[0.82,LH*0.06]] }
+  ],
+  '3': [
+    { pts: [[0.12,LH*0.97],[0.48,LH*0.98],[0.76,LH*0.82],[0.76,LH*0.62],[0.42,LH*0.50],[0.76,LH*0.38],[0.76,LH*0.18],[0.48,LH*0.02],[0.12,LH*0.03]] }
+  ],
+  '4': [
+    { pts: [[0.64,LH],[0.64,0]] },
+    { pts: [[0.64,LH],[0.06,LH*0.38],[0.82,LH*0.38]] }
+  ],
+  '5': [
+    { pts: [[0.76,LH],[0.12,LH],[0.12,LH*0.54],[0.48,LH*0.58],[0.76,LH*0.44],[0.80,LH*0.24],[0.62,LH*0.04],[0.30,LH*0.02],[0.12,LH*0.16]] }
+  ],
+  '6': [
+    { pts: [[0.72,LH*0.95],[0.40,LH*0.98],[0.14,LH*0.82],[0.08,LH*0.56],[0.08,LH*0.36],[0.18,LH*0.10],[0.46,LH*0.02],[0.74,LH*0.14],[0.78,LH*0.40],[0.70,LH*0.64],[0.44,LH*0.70],[0.14,LH*0.55]] }
+  ],
+  '7': [ { pts: [[0.08,LH],[0.78,LH],[0.34,0]] } ],
+  '8': [
+    { pts: [[0.42,LH*0.50],[0.14,LH*0.64],[0.12,LH*0.84],[0.28,LH*0.98],[0.56,LH*0.98],[0.72,LH*0.84],[0.70,LH*0.64],[0.42,LH*0.50],[0.12,LH*0.36],[0.08,LH*0.18],[0.28,LH*0.02],[0.56,LH*0.02],[0.76,LH*0.18],[0.78,LH*0.38],[0.42,LH*0.50]] }
+  ],
+  '9': [
+    { pts: [[0.12,LH*0.04],[0.46,LH*0.02],[0.74,LH*0.16],[0.80,LH*0.44],[0.74,LH*0.70],[0.44,LH*0.84],[0.16,LH*0.72],[0.10,LH*0.46],[0.18,LH*0.22],[0.44,LH*0.14],[0.72,LH*0.26],[0.80,LH*0.58],[0.72,LH*0.90],[0.46,LH*0.98],[0.16,LH*0.88]] }
+  ],
+  '!': [
+    { pts: [[0.32,LH*0.56],[0.32,LH*0.96]] },
+    { dot: [0.32, LH*0.10] }
+  ],
+  '?': [
+    { pts: [
+      [0.16,LH*0.84],
+      [0.08,LH*0.90],
+      [0.10,LH*0.96],
+      [0.22,LH*0.99],
+      [0.44,LH*0.99],
+      [0.66,LH*0.99],
+      [0.80,LH*0.92],
+      [0.82,LH*0.78],
+      [0.78,LH*0.66],
+      [0.66,LH*0.58],
+      [0.54,LH*0.54],
+      [0.44,LH*0.54],
+    ]},
+    { dot: [0.44, LH*0.10] }
+  ],
+  "'": [ { pts: [[0.28,LH*0.98],[0.22,LH*0.80]] } ],
+  '.': [ { dot: [0.22, LH*0.10] } ],
+  ',': [ { pts: [[0.26,LH*0.18],[0.16,0]] } ],
+  ':': [ { dot: [0.22, LH*0.14] }, { dot: [0.22, LH*0.52] } ],
+  ')': [ { pts: [[0.18,LH],[0.52,LH*0.72],[0.64,LH*0.50],[0.52,LH*0.28],[0.18,0]] } ],
+  '(': [ { pts: [[0.60,LH],[0.26,LH*0.72],[0.14,LH*0.50],[0.26,LH*0.28],[0.60,0]] } ],
+  '-': [ { pts: [[0.08,LH*0.50],[0.76,LH*0.50]] } ],
+  '_': [ { pts: [[0.04,0.04],[0.80,0.04]] } ],
+  ' ': []
+};
+
+function getCharWidth(c) {
+  c = c.toUpperCase();
+  if (c === ' ')  return 0.52;
+  if ('I1'.includes(c)) return 0.52;
+  if ('!.:,\'()-_'.includes(c)) return 0.56;
+  if ('MW'.includes(c)) return 1.18;
+  return 1.0;
+}
+
+function makeLetterGroup(char, mat, seamMat) {
+  const c = char.toUpperCase();
+  const defs = STROKES[c];
+  if (!defs || defs.length === 0) return null;
+
+  const grp = new THREE.Group();
+  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+
+  // Seam sits on the front surface of the main tube
+  const SEAM_R  = TUBE_R * 0.055;  // thin ridge
+  const SEAM_Z  = TUBE_R * 0.88;   // pushed to front face
+
+  for (const def of defs) {
+    let geo;
+    if (def.dot) {
+      geo = new THREE.SphereGeometry(TUBE_R * 1.1, 18, 18);
+      geo.translate(def.dot[0], def.dot[1], 0);
+      xMin = Math.min(xMin, def.dot[0]); xMax = Math.max(xMax, def.dot[0]);
+      yMin = Math.min(yMin, def.dot[1]); yMax = Math.max(yMax, def.dot[1]);
+    } else if (def.pts && def.pts.length >= 2) {
+      const pts3  = def.pts.map(([x, y]) => new THREE.Vector3(x, y, 0));
+      const curve = new THREE.CatmullRomCurve3(pts3, def.closed || false, 'catmullrom', 0.5);
+      const segs  = Math.max(32, Math.round(curve.getLength() * 80));
+      geo = new THREE.TubeGeometry(curve, segs, TUBE_R, 22, def.closed || false);
+      for (const [x, y] of def.pts) {
+        xMin = Math.min(xMin, x); xMax = Math.max(xMax, x);
+        yMin = Math.min(yMin, y); yMax = Math.max(yMax, y);
+      }
+      grp.add(new THREE.Mesh(geo, mat));
+
+      // ── Seam ridge — thin tube along front face ───────────────────────
+      const seamPts  = def.pts.map(([x, y]) => new THREE.Vector3(x, y, SEAM_Z));
+      const seamCurve = new THREE.CatmullRomCurve3(seamPts, def.closed || false, 'catmullrom', 0.5);
+      const seamSegs  = Math.max(24, Math.round(seamCurve.getLength() * 50));
+      const seamGeo   = new THREE.TubeGeometry(seamCurve, seamSegs, SEAM_R, 8, def.closed || false);
+      grp.add(new THREE.Mesh(seamGeo, seamMat));
+
+      // Sphere caps to close open tube ends
+      if (!def.closed) {
+        const [x0, y0] = def.pts[0];
+        const [x1, y1] = def.pts[def.pts.length - 1];
+        const g0 = new THREE.SphereGeometry(TUBE_R, 18, 18); g0.translate(x0, y0, 0);
+        const g1 = new THREE.SphereGeometry(TUBE_R, 18, 18); g1.translate(x1, y1, 0);
+        grp.add(new THREE.Mesh(g0, mat));
+        grp.add(new THREE.Mesh(g1, mat));
+        // Seam end caps
+        const sg0 = new THREE.SphereGeometry(SEAM_R, 8, 8); sg0.translate(x0, y0, SEAM_Z);
+        const sg1 = new THREE.SphereGeometry(SEAM_R, 8, 8); sg1.translate(x1, y1, SEAM_Z);
+        grp.add(new THREE.Mesh(sg0, seamMat));
+        grp.add(new THREE.Mesh(sg1, seamMat));
+      }
+      continue;
+    } else { continue; }
+    grp.add(new THREE.Mesh(geo, mat));
+  }
+
+  if (isFinite(xMin)) {
+    const cx = (xMin + xMax) / 2;
+    const cy = (yMin + yMax) / 2;
+    grp.children.forEach(m => m.geometry.translate(-cx, -cy, 0));
+    // Visual half-widths include tube radius so contact detection is accurate
+    return { grp, hl: cx - xMin + TUBE_R, hr: xMax - cx + TUBE_R };
+  }
+  return { grp, hl: TUBE_R, hr: TUBE_R };
+}
+
+// ── Scene ────────────────────────────────────────────────────────────────────
+const container = document.getElementById('canvas-container');
+const input     = document.getElementById('text-input');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xe8e4e0);
+
+// Lights required for MeshStandardMaterial
+const ambientLight = new THREE.AmbientLight(0xfff8f0, 0.30);
+scene.add(ambientLight);
+const keyLight = new THREE.DirectionalLight(0xfffaf0, 0.70);
+keyLight.position.set(3, 6, 5);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xf0f4ff, 0.20);
+fillLight.position.set(-5, 2, 3);
+scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xfff0e0, 0.12);
+rimLight.position.set(0, -3, -4);
+scene.add(rimLight);
+
+const camera = new THREE.PerspectiveCamera(35, container.clientWidth / container.clientHeight, 0.1, 100);
+camera.position.set(0, 0, 18);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+
+const controls = new Orbit(camera, renderer.domElement);
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2(-9999, -9999);
+let hoveredIdx = -1;
+
+renderer.domElement.addEventListener('mousemove', e => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+});
+renderer.domElement.addEventListener('mouseleave', () => {
+  mouse.set(-9999, -9999);
+});
+renderer.domElement.addEventListener('click', e => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const cm = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+   -((e.clientY - rect.top)  / rect.height) * 2 + 1
+  );
+  raycaster.setFromCamera(cm, camera);
+  const hits = raycaster.intersectObjects(letterGroup.children, true);
+  if (hits.length > 0) {
+    let obj = hits[0].object;
+    while (obj.parent && obj.parent !== letterGroup) obj = obj.parent;
+    const idx = letters.indexOf(obj);
+    if (idx >= 0) {
+      bounceAmt[idx] = 1.8; bounceTime[idx] = 0;
+      // Ripple to neighbours — they bulge outward as the poked letter squishes in
+      if (idx > 0)                   { bounceAmt[idx-1] = Math.max(bounceAmt[idx-1], 0.8); bounceTime[idx-1] = -0.12; }
+      if (idx < letters.length - 1) { bounceAmt[idx+1] = Math.max(bounceAmt[idx+1], 0.8); bounceTime[idx+1] = -0.12; }
+    }
+  }
+});
+
+const letterGroup = new THREE.Group();
+scene.add(letterGroup);
+let letters = [], targets = [], progress = [], inflateAmt = [], inflateVel = [],
+    bounceAmt = [], bounceTime = [],
+    forceOffX = [], forceOffY = [], forceVX = [], forceVY = [],
+    contactDepth = [],  // persistent per-letter contact pressure (0–1)
+    palmGrip = [];      // smoothed grip strength per letter (0–1)
+
+// ── Force field ───────────────────────────────────────────────────────────────
+const FIELD_R  = 3.8;   // world-space radius of influence
+const cursorWorld = new THREE.Vector3();
+
+// Pulsing ring that follows cursor to show field radius
+const fieldRingGeo = new THREE.TorusGeometry(FIELD_R, 0.025, 8, 80);
+const fieldRingMat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0 });
+const fieldRing = new THREE.Mesh(fieldRingGeo, fieldRingMat);
+scene.add(fieldRing);
+
+// ── Hand visualisation (VR skeleton) ──────────────────────────────────────────
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],        // thumb
+  [0,5],[5,6],[6,7],[7,8],        // index
+  [0,9],[9,10],[10,11],[11,12],   // middle
+  [0,13],[13,14],[14,15],[15,16], // ring
+  [0,17],[17,18],[18,19],[19,20], // pinky
+  [5,9],[9,13],[13,17],[17,0],    // palm arch
+];
+
+let handLandmarks    = [[], []]; // 2 hands × 21 world-space {x,y} — smoothed
+const LM_SMOOTH_MIN  = 0.01;    // alpha when hand is still (very stable)
+const LM_SMOOTH_MAX  = 0.35;    // alpha when hand is moving fast (responsive)
+const LM_SPEED_SCALE = 3.0;     // how quickly alpha ramps with speed
+
+const TIPS    = new Set([4, 8, 12, 16, 20]);
+const handJoints = [];
+for (let h = 0; h < 2; h++) {
+  const joints = [];
+  for (let j = 0; j < 21; j++) {
+    const isTip   = TIPS.has(j);
+    const isWrist = j === 0;
+    const r = isTip ? 0.13 : isWrist ? 0.15 : 0.09;
+    const geo = new THREE.CircleGeometry(r, 16);
+    const mat = new THREE.MeshBasicMaterial({
+      color: isTip ? 0x00e5ff : 0x40c4ff,
+      transparent: true,
+      opacity: isTip ? 0.95 : 0.70,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = 999;
+    mesh.visible = false;
+    scene.add(mesh);
+    // Glow halo
+    const hGeo = new THREE.CircleGeometry(r * 2.8, 16);
+    const hMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.10,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const halo = new THREE.Mesh(hGeo, hMat);
+    halo.renderOrder = 998;
+    halo.visible = false;
+    scene.add(halo);
+    joints.push({ mesh, halo });
+  }
+  handJoints.push(joints);
+}
+
+// Bone LineSegments — one per hand
+const handBones = [];
+for (let h = 0; h < 2; h++) {
+  const positions = new Float32Array(HAND_CONNECTIONS.length * 2 * 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x00b0ff,
+    transparent: true,
+    opacity: 0.40,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.renderOrder = 997;
+  lines.visible = false;
+  scene.add(lines);
+  handBones.push(lines);
+}
+
+function clear() {
+  letters.forEach(m => {
+    letterGroup.remove(m);
+    m.traverse(child => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) child.material.dispose();
+    });
+  });
+  letters = []; targets = []; progress = [];
+  inflateAmt = []; inflateVel = []; bounceAmt = []; bounceTime = [];
+  forceOffX = []; forceOffY = []; forceVX = []; forceVY = []; contactDepth = []; palmGrip = []; hoveredIdx = -1;
+}
+
+const GAP = 0.42;
+const LINE_SPACING = 2.4;
+
+function syncCamera() {
+  const cw = container.clientWidth, ch = container.clientHeight;
+  if (cw > 0 && ch > 0) {
+    camera.aspect = cw / ch;
+    camera.updateProjectionMatrix();
+    renderer.setSize(cw, ch);
+  }
+}
+
+function computeLines(text) {
+  const vb = computeViewBounds();
+  const MAX_LINE_W = vb ? (vb.right - vb.left) * 0.90 : 18.0;
+
+  function lineWidth(chars) {
+    if (!chars.length) return 0;
+    return chars.reduce((w, ch) => w + getCharWidth(ch) + GAP, -GAP);
+  }
+
+  const lines = [];
+  for (const raw of text.split('\n')) {
+    if (!raw) { lines.push([]); continue; }
+    const words = raw.split(' ');
+    let current = [];
+    for (const word of words) {
+      const wChars = word.split('');
+      if (current.length === 0) {
+        current = wChars;
+      } else {
+        const withSpace = [...current, ' ', ...wChars];
+        if (lineWidth(withSpace) > MAX_LINE_W) {
+          lines.push(current);
+          current = wChars;
+        } else {
+          current = withSpace;
+        }
+      }
+    }
+    lines.push(current);
+  }
+  return lines;
+}
+
+// instant=true skips the balloon entrance animation — used on resize so letters
+// snap directly to their correct positions rather than popping in from scale 0
+function buildLetters(text, instant = false) {
+  // syncCamera is called by the ResizeObserver before buildLetters on resize;
+  // on initial load / text-change we still need to ensure camera is in sync
+  if (!instant) syncCamera();
+
+  clear();
+  if (!text) return;
+
+  const lines    = computeLines(text);
+  const totalH   = (lines.length - 1) * LINE_SPACING;
+
+  // ── Layout lines, centred vertically as a group ───────────────────────
+  lines.forEach((chars, lineIdx) => {
+    if (!chars.length) return;
+    const lw    = chars.reduce((w, ch) => w + getCharWidth(ch) + GAP, -GAP);
+    let x       = -lw / 2;
+    const baseY = totalH / 2 - lineIdx * LINE_SPACING;
+
+    chars.forEach(ch => {
+      const cw = getCharWidth(ch);
+      if (ch === ' ') { x += cw + GAP; return; }
+
+      const mat     = createBalloonMaterial();
+      const seamMat = createSeamMaterial();
+      const result  = makeLetterGroup(ch, mat, seamMat);
+      if (!result) { x += cw + GAP; return; }
+      const { grp, hl, hr } = result;
+
+      const wrapper = new THREE.Group();
+      wrapper.add(grp);
+
+      const tx = x + cw / 2;
+      const ty = baseY + (Math.random() - 0.5) * 0.28;
+      const rx = (Math.random() - 0.5) * 0.14;
+      const ry = (Math.random() - 0.5) * 0.10;
+      const rz = (Math.random() - 0.5) * 0.08;
+
+      if (instant) {
+        wrapper.position.set(tx, ty, 0);
+        wrapper.rotation.set(rx, ry, rz);
+        wrapper.scale.set(1, 1, 1.3);
+      } else {
+        wrapper.position.set(tx, ty - 2.5, 0);
+        wrapper.rotation.set(rx, ry, rz);
+        wrapper.scale.set(0.01, 0.01, 0.01);
+      }
+
+      letterGroup.add(wrapper);
+      letters.push(wrapper);
+      targets.push({ x: tx, y: ty, hl, hr, rx, ry, lineIdx });
+      progress.push(instant ? 1 : 0);
+      inflateAmt.push(0); inflateVel.push(0);
+      bounceAmt.push(0);  bounceTime.push(0);
+      forceOffX.push(0);  forceOffY.push(0); forceVX.push(0); forceVY.push(0); palmGrip.push(0);
+
+      x += cw + GAP;
+    });
+  });
+}
+
+// Project each NDC corner onto Z=0 plane to get viewport world bounds.
+// Returns null when the camera is orbited far enough that the bounds would be
+// inverted or degenerate (e.g. camera behind the scene) — callers treat null
+// as "no wall constraint", which is the right behaviour when orbiting.
+function computeViewBounds() {
+  function ndc2z0(nx, ny) {
+    const v = new THREE.Vector3(nx, ny, 0.5).unproject(camera);
+    const d = v.sub(camera.position).normalize();
+    if (Math.abs(d.z) < 0.01) return null;
+    const t = -camera.position.z / d.z;
+    if (t < 0) return null;
+    return camera.position.clone().addScaledVector(d, t);
+  }
+  const tl = ndc2z0(-1,  1), tr = ndc2z0( 1,  1);
+  const bl = ndc2z0(-1, -1), br = ndc2z0( 1, -1);
+  if (!tl || !tr || !bl || !br) return null;
+  const PAD = 0.15;
+  const bounds = {
+    top:    Math.max(tl.y, tr.y) - PAD,
+    bottom: Math.min(bl.y, br.y) + PAD,
+    left:   Math.min(tl.x, bl.x) + PAD,
+    right:  Math.max(tr.x, br.x) - PAD
+  };
+  // Sanity-check: inverted bounds mean the camera has orbited past 90° and the
+  // z=0 plane intersection is behind it — wall constraint would push backwards.
+  if (bounds.left >= bounds.right || bounds.bottom >= bounds.top) return null;
+  return bounds;
+}
+
+function easeOutBack(t) {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+function resizeInput() {
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+}
+
+let debounce;
+input.addEventListener('input', () => {
+  resizeInput();
+  clearTimeout(debounce);
+  debounce = setTimeout(() => buildLetters(input.value), 150);
+});
+
+// ── Webcam + MediaPipe Hands ──────────────────────────────────────────────────
+let webcamActive = false, webcamStream = null;
+let handColliders = [];   // [{cx, cy, r, vx, vy}] palm + finger tips in world space
+let prevPalms     = [];   // previous palm positions for velocity computation
+let viewBoundsCache = null;
+
+const webcamVideo = document.getElementById('webcam-video');
+const camPreview  = document.getElementById('webcam-preview');
+const btnWebcam   = document.getElementById('btn-webcam');
+
+let mpHands = null;
+let mpReady = false;       // true once initialize() resolves
+let mpSending = false;     // prevent concurrent send() calls
+let mpLastSent = 0;        // timestamp of last send, used to cap at 30fps
+
+// Initialize immediately so the WASM model downloads in the background
+async function initMediaPipe() {
+  mpHands = new window.Hands({
+    locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
+  });
+  mpHands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.5
+  });
+  mpHands.onResults(results => {
+    if (!viewBoundsCache) return;
+    const vb = viewBoundsCache;
+    const bW = vb.right - vb.left;
+    const bH = vb.top   - vb.bottom;
+
+    // Landmark [0..1] → world space. Flip x because video is displayed mirrored.
+    function lm2w(lm) {
+      return { x: vb.right - lm.x * bW, y: vb.top - lm.y * bH };
+    }
+
+    const newColliders = [];
+    const newPrevPalms = [];
+
+    for (let h = 0; h < (results.multiHandLandmarks || []).length; h++) {
+      const lms = results.multiHandLandmarks[h];
+
+      // Palm center: average of wrist(0) + 4 MCP joints(5,9,13,17)
+      let px = 0, py = 0;
+      for (const idx of [0, 5, 9, 13, 17]) { px += lms[idx].x; py += lms[idx].y; }
+      px /= 5; py /= 5;
+      const palmW = lm2w({ x: px, y: py });
+
+      // Palm radius from wrist-to-middle-MCP distance
+      const wristW  = lm2w(lms[0]);
+      const midMCPW = lm2w(lms[9]);
+      const palmR   = Math.hypot(midMCPW.x - wristW.x, midMCPW.y - wristW.y) * 0.55;
+
+      // Velocity (world units/s)
+      const prev = prevPalms[h];
+      const vx   = prev ? (palmW.x - prev.x) * 60 : 0;
+      const vy   = prev ? (palmW.y - prev.y) * 60 : 0;
+      newPrevPalms[h] = palmW;
+
+      newColliders.push({ cx: palmW.x, cy: palmW.y, r: palmR, vx, vy });
+
+      // Finger-tip colliders — thumb(4), index(8), middle(12), ring(16), pinky(20)
+      for (const tipIdx of [4, 8, 12, 16, 20]) {
+        const tw = lm2w(lms[tipIdx]);
+        newColliders.push({ cx: tw.x, cy: tw.y, r: palmR * 0.30, vx, vy });
+      }
+
+      // Adaptive smoothing: barely moves when still, responsive when moving
+      const raw     = lms.map(lm => lm2w(lm));
+      const prevLms = handLandmarks[h];
+      handLandmarks[h] = raw.map((pt, j) => {
+        if (!prevLms[j]) return pt;
+        const speed = Math.hypot(pt.x - prevLms[j].x, pt.y - prevLms[j].y);
+        const alpha = Math.min(LM_SMOOTH_MAX, LM_SMOOTH_MIN + speed * LM_SPEED_SCALE);
+        return {
+          x: prevLms[j].x + (pt.x - prevLms[j].x) * alpha,
+          y: prevLms[j].y + (pt.y - prevLms[j].y) * alpha,
+        };
+      });
+    }
+
+    handColliders = newColliders;
+    prevPalms = newPrevPalms;
+    const nHands = (results.multiHandLandmarks || []).length;
+    if (!nHands) prevPalms = [];
+    for (let h = nHands; h < 2; h++) handLandmarks[h] = [];
+  });
+
+  // Must await initialize() — this downloads the WASM model.
+  // Without this, send() is a silent no-op.
+  await mpHands.initialize();
+  mpReady = true;
+}
+
+// Start loading immediately in the background
+initMediaPipe().catch(console.error);
+
+async function processWebcam() {
+  const now = performance.now();
+  if (now - mpLastSent < 34) return;  // cap at ~30fps to avoid WASM memory buildup
+  if (!webcamActive || webcamVideo.readyState < 2 || !mpReady || mpSending) return;
+  mpLastSent = now;
+  mpSending = true;
+  try {
+    await mpHands.send({ image: webcamVideo });
+  } catch (e) {
+    console.warn('MediaPipe send error:', e);
+  } finally {
+    mpSending = false;
+  }
+}
+
+function animateWebcamOn(onArrived) {
+  const btn = btnWebcam;
+
+  btn.innerHTML = [...'Webcam'].map(c => `<span class="wc-c">${c}</span>`).join('');
+  const chars = [...btn.querySelectorAll('.wc-c')];
+
+  const ball = document.createElement('div');
+  ball.className = 'wc-ball';
+  btn.appendChild(ball);
+
+  const btnLeft = btn.getBoundingClientRect().left;
+  const centres = chars.map(c => {
+    const r = c.getBoundingClientRect();
+    return (r.left + r.width / 2) - btnLeft - 7;
+  });
+
+  const BALL_R    = 7;
+  const TRAVEL_MS = 250;
+  const FADE_MS   = 240;
+  const APPEAR_MS = 220;
+  const START_DIST = 26; // px to the left of W where ball appears
+
+  let cumRot = 0;
+  let t = 16;
+
+  const startX = centres[0] - START_DIST;
+
+  // Place ball left of W, scaled to 0
+  ball.style.transition = 'none';
+  ball.style.transform  = `translate(${startX}px, -50%) scale(0) rotate(0deg)`;
+
+  // Pop in left of W
+  setTimeout(() => {
+    ball.style.transition = `transform ${APPEAR_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+    ball.style.transform  = `translate(${startX}px, -50%) scale(1) rotate(0deg)`;
+  }, t);
+  t += APPEAR_MS;
+
+  // Roll through each letter — arriving at each centre, erasing as it lands
+  chars.forEach((c, i) => {
+    const prevX = i === 0 ? startX : centres[i - 1];
+    const dist  = centres[i] - prevX;
+    cumRot     += (dist / BALL_R) * (180 / Math.PI);
+    const rollX   = centres[i];
+    const rollRot = cumRot;
+    setTimeout(() => {
+      ball.style.transition = `transform ${TRAVEL_MS}ms linear`;
+      ball.style.transform  = `translate(${rollX}px, -50%) scale(1) rotate(${rollRot}deg)`;
+      c.style.transition = `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms ease`;
+      c.style.opacity    = '0';
+      c.style.transform  = 'scale(0.15) translateY(-2px)';
+    }, t);
+    t += TRAVEL_MS;
+  });
+
+  // Arrived at last letter — show preview, then pulse
+  t += 80;
+  setTimeout(() => {
+    ball.classList.add('arrived');
+    if (onArrived) onArrived();
+  }, t);
+
+  t += 600;
+  setTimeout(() => {
+    ball.style.animation = 'recPulse 1.6s ease-out infinite';
+  }, t);
+}
+
+async function startWebcam() {
+  try {
+    webcamStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: 640, height: 480 }
+    });
+    webcamVideo.srcObject = webcamStream;
+    await webcamVideo.play();
+    handColliders = [];
+    webcamActive = true;
+    webcamToast.classList.add('hidden');
+    animateWebcamOn(() => {
+      camPreview.classList.add('visible');
+      handsToast._showTimer = setTimeout(() => {
+        handsToast.classList.remove('hidden');
+        handsToast._hideTimer = setTimeout(() => handsToast.classList.add('hidden'), 9000);
+      }, 1500);
+    });
+  } catch (e) {
+    alert('Webcam unavailable: ' + e.message);
+  }
+}
+
+function animateWebcamOff() {
+  const btn  = btnWebcam;
+  const ball = btn.querySelector('.wc-ball');
+
+  if (!ball) { btn.textContent = 'Webcam'; return; }
+
+  // Capture ball position, stop pulse
+  const savedTransform = ball.style.transform;
+  ball.style.animation = 'none';
+  ball.classList.remove('arrived');
+
+  // Rebuild invisible letter spans, re-attach ball
+  btn.innerHTML = [...'Webcam'].map(c => `<span class="wc-c">${c}</span>`).join('');
+  const chars = [...btn.querySelectorAll('.wc-c')];
+  chars.forEach(c => { c.style.opacity = '0'; c.style.transform = 'scale(0.15) translateY(-2px)'; });
+  btn.appendChild(ball);
+  ball.style.transition = 'none';
+  ball.style.transform = savedTransform;
+
+  // Measure char centres
+  const btnLeft = btn.getBoundingClientRect().left;
+  const centres = chars.map(c => {
+    const r = c.getBoundingClientRect();
+    return (r.left + r.width / 2) - btnLeft - 7;
+  });
+
+  const BALL_R    = 7;
+  const TRAVEL_MS = 110;
+  const FADE_MS   = 140;
+
+  const rotMatch = savedTransform.match(/rotate\(([-\d.]+)deg\)/);
+  let cumRot = rotMatch ? parseFloat(rotMatch[1]) : 0;
+  let t = 16;
+
+  // Roll right-to-left, revealing each letter as ball arrives
+  for (let i = chars.length - 1; i >= 0; i--) {
+    const c = chars[i];
+    setTimeout(() => {
+      c.style.transition = `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms ease`;
+      c.style.opacity = '1';
+      c.style.transform = 'scale(1) translateY(0px)';
+    }, t);
+
+    if (i > 0) {
+      const dist  = centres[i - 1] - centres[i]; // negative — rolling left
+      cumRot     += (dist / BALL_R) * (180 / Math.PI);
+      const rollX   = centres[i - 1];
+      const rollRot = cumRot;
+      setTimeout(() => {
+        ball.style.transition = `transform ${TRAVEL_MS}ms linear`;
+        ball.style.transform  = `translate(${rollX}px, -50%) scale(1) rotate(${rollRot}deg)`;
+      }, t);
+      t += TRAVEL_MS;
+    }
+  }
+
+  // Roll past W and exit left
+  t += 40;
+  const passDist = 28;
+  const pastX    = centres[0] - passDist;
+  const pastRot  = cumRot - (passDist / BALL_R) * (180 / Math.PI);
+  setTimeout(() => {
+    ball.style.transition = `transform 260ms cubic-bezier(0.4, 0, 1, 1)`;
+    ball.style.transform  = `translate(${pastX}px, -50%) scale(0) rotate(${pastRot}deg)`;
+  }, t);
+
+  // Restore button text
+  t += 320;
+  setTimeout(() => { btn.textContent = 'Webcam'; }, t);
+}
+
+function stopWebcam() {
+  if (webcamStream) webcamStream.getTracks().forEach(t => t.stop());
+  webcamStream = null;
+  webcamActive = false;
+  handColliders = [];
+  handLandmarks = [[], []];
+  prevPalms = [];
+  mpSending = false;
+  camPreview.classList.remove('visible');
+  btnWebcam.classList.remove('cam-on');
+  btnWebcam.style.transition = '';
+  btnWebcam.style.width = '';
+  btnWebcam.style.height = '';
+  clearTimeout(handsToast._showTimer);
+  clearTimeout(handsToast._hideTimer);
+  handsToast.classList.add('hidden');
+  animateWebcamOff();
+}
+
+btnWebcam.addEventListener('click', () => webcamActive ? stopWebcam() : startWebcam());
+
+const webcamToast = document.getElementById('webcam-toast');
+const handsToast  = document.getElementById('hands-toast');
+document.getElementById('webcam-toast-dismiss').addEventListener('click', () => {
+  webcamToast.classList.add('hidden');
+});
+document.getElementById('hands-toast-dismiss').addEventListener('click', () => {
+  handsToast.classList.add('hidden');
+});
+
+setTimeout(() => webcamToast.classList.remove('hidden'), 3000);
+
+let time = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  time += 0.016;
+
+  // ── Project cursor onto Z=0 plane ────────────────────────────────────────
+  if (mouse.x > -999) {
+    const v = new THREE.Vector3(mouse.x, mouse.y, 0.5).unproject(camera);
+    const d = v.sub(camera.position).normalize();
+    const tPlane = -camera.position.z / d.z;
+    cursorWorld.copy(camera.position).addScaledVector(d, tPlane);
+  }
+
+  // ── Force field ring ──────────────────────────────────────────────────────
+  fieldRing.visible = mouse.x > -999;
+  fieldRing.position.copy(cursorWorld);
+  fieldRingMat.opacity = 0.28 + Math.sin(time * 4) * 0.10;
+  fieldRing.rotation.z = time * 0.4;
+
+  // ── Hand visualisation (VR skeleton) ──────────────────────────────────────
+  for (let h = 0; h < 2; h++) {
+    const lms    = handLandmarks[h];
+    const joints = handJoints[h];
+    const bones  = handBones[h];
+    if (webcamActive && lms.length === 21) {
+      joints.forEach(({ mesh, halo }, j) => {
+        mesh.visible = halo.visible = true;
+        mesh.position.set(lms[j].x, lms[j].y, 0.5);
+        halo.position.set(lms[j].x, lms[j].y, 0.49);
+      });
+      const posArr = bones.geometry.attributes.position.array;
+      HAND_CONNECTIONS.forEach(([a, b], ci) => {
+        const base = ci * 6;
+        posArr[base]   = lms[a].x; posArr[base+1] = lms[a].y; posArr[base+2] = 0.5;
+        posArr[base+3] = lms[b].x; posArr[base+4] = lms[b].y; posArr[base+5] = 0.5;
+      });
+      bones.geometry.attributes.position.needsUpdate = true;
+      bones.visible = true;
+    } else {
+      joints.forEach(({ mesh, halo }) => { mesh.visible = halo.visible = false; });
+      bones.visible = false;
+    }
+  }
+
+  // ── Hover detection via raycasting ───────────────────────────────────────
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(letterGroup.children, true);
+  hoveredIdx = -1;
+  if (hits.length > 0) {
+    let obj = hits[0].object;
+    while (obj.parent && obj.parent !== letterGroup) obj = obj.parent;
+    hoveredIdx = letters.indexOf(obj);
+  }
+
+  const viewBounds = computeViewBounds();
+  viewBoundsCache = viewBounds;   // shared with MediaPipe coordinate conversion
+  processWebcam();
+  const LETTER_HALF_H = LH * 0.5 + TUBE_R; // approx half-height of a letter
+
+  letters.forEach((m, i) => {
+    // ── Entrance animation ──────────────────────────────────────────────
+    let baseScale = 1;
+    if (progress[i] < 1) {
+      progress[i] = Math.min(1, progress[i] + 0.024);
+      const delay = i * 0.05;
+      const p  = Math.max(0, Math.min(1, progress[i] - delay * 0.3));
+      baseScale = easeOutBack(p);
+      m.position.y = targets[i].y + (1 - easeOutBack(p)) * -2.5;
+    }
+
+    // ── Float ───────────────────────────────────────────────────────────
+    if (progress[i] >= 0.9) {
+      const fy = Math.sin(time * 0.4 + i * 0.9) * 0.08;
+      const fr = Math.sin(time * 0.25 + i * 1.2) * 0.015;
+      m.position.y = targets[i].y + fy;
+      m.rotation.z += (fr - m.rotation.z) * 0.02;
+    }
+
+    // ── Click bounce ─────────────────────────────────────────────────────
+    bounceTime[i] += 0.016;
+    bounceAmt[i]  *= 0.955; // very slow decay — Doughboy wobbles for ~2 s
+
+    // ── Continuous inflation while hovered, spring deflation on leave ───
+    if (i === hoveredIdx && progress[i] > 0.95) {
+      inflateAmt[i] = Math.min(1.0, inflateAmt[i] + 0.007);
+      inflateVel[i] = 0;
+    } else {
+      inflateVel[i] += (0 - inflateAmt[i]) * 0.12;
+      inflateVel[i] *= 0.78;
+      inflateAmt[i] = Math.max(0, inflateAmt[i] + inflateVel[i]);
+    }
+
+    // ── Contact-based neighbour dents ────────────────────────────────────
+    // Only squish when the inflating letter's edge physically reaches this one.
+    let squishX = 1.0, extraZ = 0.0, xPush = 0.0;
+
+    function contactSquish(inflatingSide, inflatingIdx, myEdge, inflatingEdgeFn) {
+      if (inflateAmt[inflatingIdx] <= 0) return;
+      const sxN       = 1.0 + inflateAmt[inflatingIdx] * 0.35;
+      const natEdgeN  = inflatingEdgeFn(1.0);   // natural edge of inflating letter
+      const infEdgeN  = inflatingEdgeFn(sxN);   // inflated edge of inflating letter
+      const natOverlap  = Math.max(0, inflatingSide === 'left'
+        ? natEdgeN  - myEdge
+        : myEdge    - natEdgeN);
+      const infOverlap  = Math.max(0, inflatingSide === 'left'
+        ? infEdgeN  - myEdge
+        : myEdge    - infEdgeN);
+      const extra     = Math.max(0, infOverlap - natOverlap);
+      const amt       = Math.min(1, extra / (TUBE_R * 1.5));
+      squishX -= amt * 0.45;
+      extraZ  += amt * 0.28;
+      xPush   += inflatingSide === 'left' ? amt * 0.14 : -amt * 0.14;
+    }
+
+    if (i > 0 && targets[i-1].lineIdx === targets[i].lineIdx)
+      contactSquish('left',  i - 1,
+        targets[i].x - targets[i].hl,
+        sx => targets[i-1].x + targets[i-1].hr * sx);
+
+    if (i < letters.length - 1 && targets[i+1].lineIdx === targets[i].lineIdx)
+      contactSquish('right', i + 1,
+        targets[i].x + targets[i].hr,
+        sx => targets[i+1].x - targets[i+1].hl * sx);
+
+    const t   = inflateAmt[i];
+    // Bounce oscillation — slow & gooey
+    const bt  = bounceAmt[i] * Math.sin(bounceTime[i] * 15);
+
+    // ── Cursor force field ────────────────────────────────────────────────
+    if (mouse.x > -999 && progress[i] > 0.9) {
+      const dx = m.position.x - cursorWorld.x;
+      const dy = m.position.y - cursorWorld.y;
+      const dist2 = dx * dx + dy * dy;
+      const dist  = Math.sqrt(dist2) + 0.01;
+      const str   = 0.09 * Math.exp(-dist2 / (FIELD_R * FIELD_R * 0.28));
+      forceVX[i] += (dx / dist) * str;
+      forceVY[i] += (dy / dist) * str;
+    }
+
+    // ── Hand collider forces (MediaPipe) ─────────────────────────────────
+    let touching = false;
+    if (webcamActive && progress[i] > 0.9 && handColliders.length > 0) {
+      const letterR = (targets[i].hl + targets[i].hr) * 0.5 * m.scale.x;
+      for (const col of handColliders) {
+        const dx   = m.position.x - col.cx;
+        const dy   = m.position.y - col.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy) + 0.001;
+        const minD = col.r + letterR;
+        if (dist < minD) {
+          touching = true;
+          const pen = (minD - dist) / minD;
+          const nx  = dx / dist, ny = dy / dist;
+          // Always push out — letters can never enter a hand
+          forceVX[i] += nx * pen * 0.15;
+          forceVY[i] += ny * pen * 0.15;
+          // Transfer hand velocity to letter when hand moves toward it
+          const approach = -(col.vx * nx + col.vy * ny);
+          if (approach > 0) {
+            forceVX[i] += nx * approach * 0.025;
+            forceVY[i] += ny * approach * 0.025;
+          }
+        }
+      }
+    }
+    palmGrip[i] = (palmGrip[i] || 0) * 0.85 + (touching ? 1 : 0) * 0.15;
+
+    // Spring return — almost fully suppressed while hand is touching
+    const grip       = palmGrip[i] || 0;
+    const springGate = (1 - Math.min(0.92, (contactDepth[i] || 0) * 1.1)) * (1 - grip * 0.92);
+    forceVX[i] -= forceOffX[i] * 0.072 * springGate;
+    forceVY[i] -= forceOffY[i] * 0.072 * (1 - grip * 0.88);
+    // Very heavy damping while touching — kills bounce immediately
+    const damp = touching ? 0.55 : 0.87;
+    forceVX[i] *= damp; forceVY[i] *= damp;
+    forceOffX[i] += forceVX[i];
+    forceOffY[i] += forceVY[i];
+
+    // ── Viewport wall constraints (hard clamp + elastic bounce) ──────────
+    if (viewBounds && progress[i] > 0.9) {
+      const estX = targets[i].x + forceOffX[i];
+      const estY = targets[i].y + forceOffY[i];
+      if (estY + LETTER_HALF_H > viewBounds.top) {
+        forceOffY[i] = viewBounds.top - targets[i].y - LETTER_HALF_H;
+        if (forceVY[i] > 0) forceVY[i] = -forceVY[i] * 0.38;
+      }
+      if (estY - LETTER_HALF_H < viewBounds.bottom) {
+        forceOffY[i] = viewBounds.bottom - targets[i].y + LETTER_HALF_H;
+        if (forceVY[i] < 0) forceVY[i] = -forceVY[i] * 0.38;
+      }
+      if (estX + targets[i].hr > viewBounds.right) {
+        forceOffX[i] = viewBounds.right - targets[i].x - targets[i].hr;
+        if (forceVX[i] > 0) forceVX[i] = -forceVX[i] * 0.38;
+      }
+      if (estX - targets[i].hl < viewBounds.left) {
+        forceOffX[i] = viewBounds.left - targets[i].x + targets[i].hl;
+        if (forceVX[i] < 0) forceVX[i] = -forceVX[i] * 0.38;
+      }
+    }
+
+    // ── Liquid squish from velocity ───────────────────────────────────────
+    // Fast motion in X → compress X, flow out in Y and Z (like a water balloon)
+    const fvx = forceVX[i], fvy = forceVY[i];
+    const fspeed = Math.sqrt(fvx * fvx + fvy * fvy);
+    const liqX = Math.max(0.30, 1.0 - Math.abs(fvx) * 5.5);
+    const liqY = Math.max(0.30, 1.0 - Math.abs(fvy) * 5.5);
+    const liqZ = 1.0 + fspeed * 6.0;  // volume flows into Z
+
+    // Combine: bounce (big deformation) × contact squish × liquid squish
+    const sX = baseScale * (1.0 + t * 0.35 + bt * 0.38) * Math.max(0.3, squishX) * liqX;
+    const sY = baseScale * (1.0 + t * 0.35 + bt * 0.30) * liqY;
+    const sZ = baseScale * (1.3 + t * 0.35 - bt * 0.62) * (1.0 + extraZ) * liqZ;
+    m.scale.set(sX, sY, sZ);
+
+    m.position.x = targets[i].x + xPush + forceOffX[i];
+    m.position.y += forceOffY[i];
+
+    // Rotation — wobble from bounce + tilt in direction of travel (liquid inertia)
+    const wb = bounceAmt[i] * Math.sin(bounceTime[i] * 9 + 1.0);
+    m.rotation.x = targets[i].rx + wb * 0.22 + fvy * 2.2;
+    m.rotation.y = targets[i].ry + wb * 0.28 - fvx * 2.2;
+  });
+
+  // ── Collision resolution ──────────────────────────────────────────────────
+  while (contactDepth.length < letters.length) contactDepth.push(0);
+
+  // Decay contact pressure each frame
+  for (let i = 0; i < letters.length; i++) contactDepth[i] *= 0.80;
+
+  // 1. Measure overlap BEFORE any correction → accumulate contact pressure
+  for (let i = 0; i < letters.length - 1; i++) {
+    const j = i + 1;
+    if (progress[i] < 0.9 || progress[j] < 0.9) continue;
+    if (targets[i].lineIdx !== targets[j].lineIdx) continue;
+    const mi = letters[i], mj = letters[j];
+    const rightI = mi.position.x + targets[i].hr * mi.scale.x;
+    const leftJ  = mj.position.x - targets[j].hl * mj.scale.x;
+    const ov = Math.max(0, rightI - leftJ);
+    if (ov > 0) {
+      const pressure = Math.min(1, ov / (TUBE_R * 0.6));
+      contactDepth[i] = Math.min(1, contactDepth[i] + pressure * 0.7);
+      contactDepth[j] = Math.min(1, contactDepth[j] + pressure * 0.7);
+      // Elastic velocity bounce
+      const relV = forceVX[i] - forceVX[j];
+      if (relV > 0) {
+        const impulse = (1 + 0.55) * relV * 0.5;
+        forceVX[i] -= impulse;
+        forceVX[j] += impulse;
+      }
+    }
+  }
+
+  // 2. Apply balloon squish from contact pressure
+  //    Scale.x is already set by physics — multiply it down, bulge y and z
+  for (let i = 0; i < letters.length; i++) {
+    const cd = contactDepth[i];
+    if (cd < 0.01) continue;
+    const mi = letters[i];
+    mi.scale.x = Math.max(0.15, mi.scale.x * (1 - cd * 0.68));
+    mi.scale.y *= (1 + cd * 0.50);
+    mi.scale.z *= (1 + cd * 0.75);
+  }
+
+  // 3. Hard render-only separation — 10 iterations, no spring to fight
+  //    Bleeds only 25% into forceOffX so physics learns slowly
+  for (let iter = 0; iter < 10; iter++) {
+    for (let i = 0; i < letters.length - 1; i++) {
+      const j = i + 1;
+      if (progress[i] < 0.9 || progress[j] < 0.9) continue;
+      if (targets[i].lineIdx !== targets[j].lineIdx) continue;
+      const mi = letters[i], mj = letters[j];
+      const rightI  = mi.position.x + targets[i].hr * mi.scale.x;
+      const leftJ   = mj.position.x - targets[j].hl * mj.scale.x;
+      const overlap = rightI - leftJ;
+      if (overlap <= 0) continue;
+      const push = overlap * 0.5;
+      mi.position.x -= push;
+      mj.position.x += push;
+      // Gentle bleed into physics so letters gradually learn separation
+      forceOffX[i] -= push * 0.25;
+      forceOffX[j] += push * 0.25;
+    }
+  }
+
+  // If resize has settled, rebuild layout atomically in this frame:
+  // setSize + buildLetters + render all happen together — no black flash.
+  if (pendingRebuild) {
+    pendingRebuild = false;
+    const w = container.clientWidth, h = container.clientHeight;
+    if (w > 0 && h > 0) {
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+    buildLetters(input.value || 'Squishy Letters', true);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+let resizeDebounce;
+let pendingRebuild = false;
+window.addEventListener('resize', () => {
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w > 0 && h > 0) {
+    // Update pixel buffer and camera immediately — animate loop renders within
+    // one RAF frame (~16ms) so the cleared canvas is never visible to the user.
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  // Clear stale physics offsets so letters don't drift outside the new frustum.
+  forceOffX.fill(0); forceOffY.fill(0);
+  forceVX.fill(0);   forceVY.fill(0);
+  // After resize settles, rebuild word-wrap layout.
+  clearTimeout(resizeDebounce);
+  resizeDebounce = setTimeout(() => { pendingRebuild = true; }, 200);
+});
+
+
+
+buildLetters(input.value || 'Squishy Letters');
+animate();
+</script>
+</body>
+</html>
