@@ -1123,6 +1123,7 @@ async function startWebcam() {
     });
   } catch (e) {
     console.warn('Webcam unavailable:', e.message);
+    clearTimeout(webcamToastTimer);
     webcamToast.classList.add('hidden');
     const t = document.getElementById('cam-error-toast');
     t.classList.remove('hidden');
@@ -1234,7 +1235,7 @@ document.getElementById('cam-error-dismiss').addEventListener('click', () => {
   document.getElementById('cam-error-toast').classList.add('hidden');
 });
 
-setTimeout(() => webcamToast.classList.remove('hidden'), 3000);
+const webcamToastTimer = setTimeout(() => webcamToast.classList.remove('hidden'), 3000);
 
 let time = 0;
 function animate() {
