@@ -818,8 +818,7 @@ function computeLines(text) {
 // instant=true skips the balloon entrance animation — used on resize so letters
 // snap directly to their correct positions rather than popping in from scale 0
 function buildLetters(text, instant = false) {
-  // syncCamera is called by the ResizeObserver before buildLetters on resize;
-  // on initial load / text-change we still need to ensure camera is in sync
+  // on initial load / text-change we need to ensure camera is in sync
   if (!instant) syncCamera();
 
   clear();
@@ -1226,6 +1225,7 @@ btnWebcam.addEventListener('click', () => webcamActive ? stopWebcam() : startWeb
 const webcamToast = document.getElementById('webcam-toast');
 const handsToast  = document.getElementById('hands-toast');
 document.getElementById('webcam-toast-dismiss').addEventListener('click', () => {
+  clearTimeout(webcamToastTimer);
   webcamToast.classList.add('hidden');
 });
 document.getElementById('hands-toast-dismiss').addEventListener('click', () => {
