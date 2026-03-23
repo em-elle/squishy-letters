@@ -200,6 +200,11 @@
   <button class="webcam-toast-dismiss" id="webcam-toast-dismiss" aria-label="Dismiss">×</button>
 </div>
 
+<div class="webcam-toast hidden" id="cam-error-toast">
+  Camera blocked — open squishyletters.com directly in your browser
+  <button class="webcam-toast-dismiss" id="cam-error-dismiss" aria-label="Dismiss">×</button>
+</div>
+
 <div class="bottom-bar">
   <div class="input-row">
     <div class="input-bar">
@@ -1118,6 +1123,9 @@ async function startWebcam() {
     });
   } catch (e) {
     console.warn('Webcam unavailable:', e.message);
+    const t = document.getElementById('cam-error-toast');
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 6000);
   }
 }
 
@@ -1220,6 +1228,9 @@ document.getElementById('webcam-toast-dismiss').addEventListener('click', () => 
 });
 document.getElementById('hands-toast-dismiss').addEventListener('click', () => {
   handsToast.classList.add('hidden');
+});
+document.getElementById('cam-error-dismiss').addEventListener('click', () => {
+  document.getElementById('cam-error-toast').classList.add('hidden');
 });
 
 setTimeout(() => webcamToast.classList.remove('hidden'), 3000);
