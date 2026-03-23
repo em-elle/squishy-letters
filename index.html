@@ -1100,7 +1100,6 @@ function animateWebcamOn(onArrived) {
 }
 
 async function startWebcam() {
-  if (!navigator.mediaDevices?.getUserMedia) return;
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: 640, height: 480 }
@@ -1118,7 +1117,7 @@ async function startWebcam() {
       }, 1500);
     });
   } catch (e) {
-    // Permission denied or other error — leave button in place so user can retry
+    console.warn('Webcam unavailable:', e.message);
   }
 }
 
