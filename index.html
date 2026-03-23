@@ -161,7 +161,7 @@
     width: 100%; display: block; transform: scaleX(-1);
   }
   @media (max-width: 600px) {
-    .bottom-bar { padding: 24px 0 36px; }
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; transform: none; width: 100%; padding: 16px 24px 48px; }
     .input-bar { padding: 14px 20px; width: 80%; }
     .input-bar textarea { font-size: 18px; min-height: 28px; }
     #btn-webcam { display: none; }
@@ -1544,6 +1544,19 @@ window.addEventListener('resize', () => {
 
 if (window.matchMedia('(pointer: coarse)').matches) {
   document.getElementById('hint-controls').textContent = 'Drag to orbit · Pinch to zoom';
+}
+
+// On mobile, keep the bottom bar pinned above the keyboard using visualViewport.
+// When the keyboard opens, visualViewport.height shrinks; we shift bottom-bar up
+// by the keyboard height so it always sits 48px above the visible bottom edge.
+if (window.visualViewport && window.innerWidth <= 600) {
+  const bottomBar = document.querySelector('.bottom-bar');
+  function syncBottomBar() {
+    const keyboardH = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
+    bottomBar.style.bottom = keyboardH + 'px';
+  }
+  window.visualViewport.addEventListener('resize', syncBottomBar);
+  window.visualViewport.addEventListener('scroll', syncBottomBar);
 }
 
 buildLetters(input.value || 'Squishy Letters');
