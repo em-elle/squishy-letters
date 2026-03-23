@@ -1123,6 +1123,7 @@ async function startWebcam() {
     });
   } catch (e) {
     console.warn('Webcam unavailable:', e.message);
+    webcamToast.classList.add('hidden');
     const t = document.getElementById('cam-error-toast');
     t.classList.remove('hidden');
     setTimeout(() => t.classList.add('hidden'), 6000);
