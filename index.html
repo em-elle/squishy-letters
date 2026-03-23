@@ -1097,6 +1097,10 @@ function animateWebcamOn(onArrived) {
 }
 
 async function startWebcam() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    alert('Webcam not supported in this browser.');
+    return;
+  }
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: 640, height: 480 }
