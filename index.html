@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Squishy Letters</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap');
@@ -15,7 +15,7 @@
     flex-direction: column;
     overflow: hidden;
   }
-  #canvas-container { flex: 1; position: relative; cursor: grab; }
+  #canvas-container { flex: 1; position: relative; cursor: grab; touch-action: none; }
   #canvas-container:active { cursor: grabbing; }
   canvas { display: block; }
   .hint {
@@ -162,13 +162,19 @@
   #webcam-preview video {
     width: 100%; display: block; transform: scaleX(-1);
   }
+  @media (max-width: 600px) {
+    .bottom-bar { padding: 24px 0 36px; }
+    .input-bar { padding: 14px 20px; width: 80%; }
+    .input-bar textarea { font-size: 18px; min-height: 28px; }
+    #btn-webcam { display: none; }
+  }
 </style>
 </head>
 <body>
 
 <div id="canvas-container">
   <div class="hint hint-left">SQUISHY LETTERS</div>
-  <div class="hint">Drag to orbit · Scroll to zoom</div>
+  <div class="hint" id="hint-controls">Drag to orbit · Scroll to zoom</div>
   <div class="hint hint-right">by <a href="https://askformailinh.com" target="_blank" rel="noopener">Mai-Linh Barry</a> using Claude Code</div>
   <div id="webcam-preview">
     <div class="cam-frame">
@@ -216,16 +222,41 @@ class Orbit {
     this.sc = 1; this.st = new THREE.Vector2(); this.dn = false;
     this.df = 0.08;
     this.sph.setFromVector3(new THREE.Vector3().copy(cam.position).sub(this.target));
-    el.addEventListener('pointerdown', e => { this.dn = true; this.st.set(e.clientX, e.clientY); });
+    this.ptrs = new Map(); // active pointer id → {x, y}
+    el.addEventListener('pointerdown', e => {
+      this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.ptrs.size === 1) { this.dn = true; this.st.set(e.clientX, e.clientY); }
+      if (this.ptrs.size === 2) { this.dn = false; this._pinchDist = this._getPinchDist(); }
+    });
     el.addEventListener('pointermove', e => {
+      if (!this.ptrs.has(e.pointerId)) return;
+      this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.ptrs.size === 2) {
+        // Pinch-to-zoom
+        const d = this._getPinchDist();
+        if (this._pinchDist > 0) this.sc *= this._pinchDist / d;
+        this._pinchDist = d;
+        return;
+      }
       if (!this.dn) return;
       this.sphD.theta -= 2*Math.PI*(e.clientX-this.st.x)/el.clientWidth*0.5;
       this.sphD.phi   -= 2*Math.PI*(e.clientY-this.st.y)/el.clientHeight*0.5;
       this.st.set(e.clientX, e.clientY);
     });
-    el.addEventListener('pointerup',    () => this.dn = false);
-    el.addEventListener('pointerleave', () => this.dn = false);
+    el.addEventListener('pointerup', e => {
+      this.ptrs.delete(e.pointerId);
+      this.dn = this.ptrs.size === 1;
+      if (this.ptrs.size === 1) this.st.set([...this.ptrs.values()][0].x, [...this.ptrs.values()][0].y);
+    });
+    el.addEventListener('pointerleave', e => {
+      this.ptrs.delete(e.pointerId);
+      this.dn = this.ptrs.size === 1;
+    });
     el.addEventListener('wheel', e => { e.preventDefault(); this.sc *= e.deltaY > 0 ? 1.06 : 0.94; }, { passive: false });
+  }
+  _getPinchDist() {
+    const [a, b] = [...this.ptrs.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
   update() {
     const o = new THREE.Vector3().copy(this.cam.position).sub(this.target);
@@ -1506,6 +1537,10 @@ window.addEventListener('resize', () => {
 });
 
 
+
+if (window.matchMedia('(pointer: coarse)').matches) {
+  document.getElementById('hint-controls').textContent = 'Drag to orbit · Pinch to zoom';
+}
 
 buildLetters(input.value || 'Squishy Letters');
 animate();
