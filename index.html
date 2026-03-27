@@ -1307,10 +1307,15 @@ function animate() {
     const joints = handJoints[h];
     const bones  = handBones[h];
     if (webcamActive && lms.length === 21) {
+      // Scale joints inversely with camera distance so they stay the same
+      // screen size regardless of zoom — the hand UI should feel like an overlay.
+      const jointScale = camera.position.length() / 18;
       joints.forEach(({ mesh, halo }, j) => {
         mesh.visible = halo.visible = true;
         mesh.position.set(lms[j].x, lms[j].y, 0.5);
         halo.position.set(lms[j].x, lms[j].y, 0.49);
+        mesh.scale.setScalar(jointScale);
+        halo.scale.setScalar(jointScale);
       });
       const posArr = bones.geometry.attributes.position.array;
       HAND_CONNECTIONS.forEach(([a, b], ci) => {
