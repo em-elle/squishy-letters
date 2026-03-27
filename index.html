@@ -94,6 +94,8 @@
     min-height: 26px; padding: 0; text-align: center;
   }
   .input-bar textarea::placeholder { color: rgba(40,40,40,0.35); }
+  .input-bar textarea:focus::placeholder,
+  .input-bar textarea:focus::-webkit-input-placeholder { color: transparent; }
   #btn-webcam {
     flex-shrink: 0; border: none; background: transparent; cursor: pointer;
     font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500;
@@ -645,6 +647,8 @@ function makeLetterGroup(char, mat, seamMat) {
 // ── Scene ────────────────────────────────────────────────────────────────────
 const container = document.getElementById('canvas-container');
 const input     = document.getElementById('text-input');
+input.addEventListener('focus', () => { input.placeholder = ''; });
+input.addEventListener('blur',  () => { if (!input.value) input.placeholder = 'Type something...'; });
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xe8e4e0);
